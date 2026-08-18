@@ -228,11 +228,26 @@ export async function sendChatMessage(
 ) {
   if (useMock) {
     return {
-      text:
-        'Mock mode is enabled. Connect the FastAPI backend to retrieve real document context.',
-      sources: [],
-      timestamp:
-        new Date().toISOString(),
+      success: true,
+      query: message,
+      query_understanding: null,
+      route: 'retrieval',
+      route_reason: 'Mock response',
+      retrieval: {
+        results: [],
+        retrieval: {
+          semantic_candidates: 0,
+          exact_candidates: 0,
+          merged_candidates: 0,
+          returned_results: 0,
+        },
+      },
+      response: {
+        answer:
+          'Mock mode is enabled. Connect the FastAPI backend to retrieve real document context.',
+        sources: [],
+        confidence: 0,
+      },
     };
   }
 
@@ -260,42 +275,5 @@ export async function sendChatMessage(
     );
   }
 
-  const sources = (
-    data.results || []
-  ).map((result, index) => {
-    const metadata =
-      result.metadata || {};
-
-    return {
-      id: `${metadata.document_id || 'result'}-${metadata.chunk_index ?? index}`,
-      fileName:
-        metadata.filename ||
-        'Retrieved document',
-      chunkIndex:
-        metadata.chunk_index ?? index,
-      content:
-        result.content || '',
-      score: result.distance,
-      distance: result.distance,
-    };
-  });
-
-  const text = sources.length
-    ? `I found ${sources.length} relevant document chunk${
-        sources.length === 1 ? '' : 's'
-      } for your query:\n\n` +
-      sources
-        .map(
-          (source, index) =>
-            `[${index + 1}] ${source.content}`
-        )
-        .join('\n\n')
-    : 'No relevant document chunks were found for this query.';
-
-  return {
-    text,
-    sources,
-    timestamp:
-      new Date().toISOString(),
-  };
+  return data;
 }

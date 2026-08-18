@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 export default function ChatBubble({ message, onSelectSource }) {
-  const { sender, text, sources, timestamp } = message;
+  const { sender, text, sources, confidence, timestamp } = message;
   const isUser = sender === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -126,7 +126,7 @@ export default function ChatBubble({ message, onSelectSource }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {sources.map((source, idx) => (
                 <button
-                  key={source.id || idx}
+                  key={source.chunk_id || source.reference || idx}
                   onClick={() => onSelectSource && onSelectSource(source)}
                   className="badge badge-purple"
                   style={{
@@ -153,10 +153,10 @@ export default function ChatBubble({ message, onSelectSource }) {
                     <polyline points="14 2 14 8 20 8"/>
                   </svg>
                   <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {source.fileName}
+                    {source.source || source.metadata?.filename || 'Retrieved document'}
                   </span>
                   <span style={{ opacity: 0.6, fontSize: '0.7rem' }}>
-                    [{source.chunkIndex}]
+                    {source.reference || `[${idx + 1}]`}
                   </span>
                   <span style={{
                     marginLeft: '4px',
@@ -167,11 +167,17 @@ export default function ChatBubble({ message, onSelectSource }) {
                     color: 'var(--text-primary)',
                     fontWeight: 'bold'
                   }}>
-                    {Math.round(source.score * 100)}%
+                    {Math.round(Number(source.relevance_score || 0) * 100)}%
                   </span>
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {!isUser && Number.isFinite(Number(confidence)) && (
+          <div style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            Answer confidence: <strong style={{ color: 'var(--accent-emerald)' }}>{Math.round(Number(confidence) * 100)}%</strong>
           </div>
         )}
       </div>

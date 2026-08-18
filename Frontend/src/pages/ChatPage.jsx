@@ -13,7 +13,7 @@ export default function ChatPage() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [selectedSource, setSelectedSource] = useState(null);
-  const [currentSources, setCurrentSources] = useState([]);
+  const [currentResults, setCurrentResults] = useState([]);
   
   const chatEndRef = useRef(null);
 
@@ -49,33 +49,21 @@ export default function ChatPage() {
       }));
 
       const response = await api.sendChatMessage(text, history);
-
-      // ChromaDB returns a distance, not a 0..1 confidence score.
-      // Convert it only for the existing UI percentage display.
-      const normalizedSources = (response.sources || []).map((source) => {
-        const distance = Number(source.distance);
-        const score = Number.isFinite(distance)
-          ? 1 / (1 + Math.max(distance, 0))
-          : 0;
-
-        return { ...source, score };
-      });
+      const answer = response.response?.answer || '';
+      const sources = response.response?.sources || [];
+      const results = response.retrieval?.results || [];
 
       const botMsg = {
         sender: 'bot',
-        text: response.text,
-        sources: normalizedSources,
-        timestamp: response.timestamp || new Date().toISOString()
+        text: answer,
+        sources,
+        confidence: response.response?.confidence,
+        timestamp: new Date().toISOString()
       };
 
       setMessages(prev => [...prev, botMsg]);
-      
-      // Update sources panel
-      if (normalizedSources.length > 0) {
-        setCurrentSources(normalizedSources);
-        // Default select the first source to inspect
-        setSelectedSource(normalizedSources[0]);
-      }
+      setCurrentResults(results);
+      setSelectedSource(results[0] || null);
     } catch (e) {
       setMessages(prev => [...prev, {
         sender: 'bot',
@@ -123,7 +111,7 @@ export default function ChatPage() {
                     timestamp: new Date().toISOString()
                   }
                 ]);
-                setCurrentSources([]);
+                setCurrentResults([]);
                 setSelectedSource(null);
               }}
               className="btn btn-secondary" 
@@ -141,7 +129,12 @@ export default function ChatPage() {
               key={idx} 
               message={msg} 
               onSelectSource={(source) => {
-                setSelectedSource(source);
+                const matchingResult = currentResults.find((result) => (
+                  result.chunk_id && source.chunk_id
+                    ? result.chunk_id === source.chunk_id
+                    : result.metadata?.filename === source.source
+                ));
+                setSelectedSource(matchingResult || source);
               }}
             />
           ))}
@@ -266,12 +259,12 @@ export default function ChatPage() {
                     <polyline points="14 2 14 8 20 8"/>
                   </svg>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, wordBreak: 'break-all' }}>
-                    {selectedSource.fileName}
+                    {selectedSource.metadata?.filename || selectedSource.source || 'Retrieved document'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  <span>Chunk Index: <strong>#{selectedSource.chunkIndex}</strong></span>
-                  <span>Confidence: <strong style={{ color: 'var(--accent-emerald)' }}>{Math.round(selectedSource.score * 100)}%</strong></span>
+                  <span>Chunk ID: <strong>{selectedSource.chunk_id || 'Unavailable'}</strong></span>
+                  <span>Relevance: <strong style={{ color: 'var(--accent-emerald)' }}>{Math.round(Number(selectedSource.relevance_score || 0) * 100)}%</strong></span>
                 </div>
               </div>
 
@@ -295,25 +288,30 @@ export default function ChatPage() {
                   whiteSpace: 'pre-wrap'
                 }}
               >
-                {selectedSource.content}
+                {selectedSource.content || 'No retrieved content is available for this source.'}
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <span>Semantic: <strong>{Number(selectedSource.semantic_score || 0).toFixed(3)}</strong></span>
+                <span>Metadata: <strong>{Object.keys(selectedSource.metadata || {}).length} fields</strong></span>
               </div>
 
               {/* All sources retrieved list */}
-              {currentSources.length > 0 && (
+              {currentResults.length > 0 && (
                 <div style={{ marginTop: '24px' }}>
                   <h4 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    All Matches ({currentSources.length})
+                    All Matches ({currentResults.length})
                   </h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {currentSources.map((src, idx) => (
+                    {currentResults.map((src, idx) => (
                       <div 
-                        key={src.id || idx}
+                        key={src.chunk_id || idx}
                         onClick={() => setSelectedSource(src)}
                         style={{
                           padding: '10px 12px',
                           borderRadius: '8px',
-                          border: '1px solid ' + (selectedSource.id === src.id ? 'var(--accent-purple)' : 'var(--border-color)'),
-                          background: selectedSource.id === src.id ? 'hsla(263, 85%, 65%, 0.08)' : 'transparent',
+                          border: '1px solid ' + (selectedSource.chunk_id === src.chunk_id ? 'var(--accent-purple)' : 'var(--border-color)'),
+                          background: selectedSource.chunk_id === src.chunk_id ? 'hsla(263, 85%, 65%, 0.08)' : 'transparent',
                           cursor: 'pointer',
                           display: 'flex',
                           justifyContent: 'space-between',
@@ -322,10 +320,10 @@ export default function ChatPage() {
                         }}
                       >
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
-                          {src.fileName} <span style={{ color: 'var(--text-muted)' }}>[#{src.chunkIndex}]</span>
+                          {src.metadata?.filename || 'Retrieved document'} <span style={{ color: 'var(--text-muted)' }}>[{src.chunk_id || 'chunk'}]</span>
                         </span>
                         <span style={{ fontWeight: 'bold', color: 'var(--accent-emerald)' }}>
-                          {Math.round(src.score * 100)}%
+                          {Math.round(Number(src.relevance_score || 0) * 100)}%
                         </span>
                       </div>
                     ))}

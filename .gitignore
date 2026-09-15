@@ -1,0 +1,45 @@
+# -------------------------
+# Python
+# -------------------------
+.venv/
+.runtime_venv/
+__pycache__/
+*.py[cod]
+
+# -------------------------
+# Backend runtime data
+# -------------------------
+backend/chroma_db/
+backend/uploads/
+backend/metadata/documents.json
+
+# -------------------------
+# Frontend
+# -------------------------
+frontend/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+
+# -------------------------
+# Environment files
+# -------------------------
+.env
+*.env
+
+# -------------------------
+# IDE
+# -------------------------
+.vscode/
+.idea/
+
+# -------------------------
+# OS files
+# -------------------------
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# MySQL Database
+# -------------------------
+backend/memory.db
